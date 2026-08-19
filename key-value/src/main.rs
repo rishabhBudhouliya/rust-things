@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
-use std::str::from_utf8;
 
 mod test;
 
@@ -35,6 +34,31 @@ impl KeyValue {
             fd: (fd as u32),
             map,
         }
+    }
+
+    // goal 2: define get/set functions for the KeyValue struct
+    // we should not promise an owner value, instead, it should be a peek/reference into the storage
+    pub fn get(&self, key: String) -> Option<&u32> {
+        return self.map.get(&key);
+    }
+
+    // set requires two steps
+    // 1) mutate the in-memory hashmap
+    // 2) mutate the on-disk hashmap
+    // implement deduplication
+    pub fn set(&mut self, key: String, value: u32) {
+        let x = &key;
+        let y = &value.to_string();
+        let stored = format!("{x}:{y}\n");
+        if self.map.get(x) == Some(&value) {
+            println!("Value already exists");
+            return;
+        }
+        self.map.insert(key, value);
+        let written_buffer = stored.into_bytes();
+        let size_buffer = written_buffer.len();
+        let ptr: *const u8 = written_buffer.as_ptr();
+        let _ = unsafe { libc::write(self.fd as i32, ptr as *mut c_void, size_buffer as usize) };
     }
 }
 
@@ -73,7 +97,9 @@ fn parse_buffer(file_d: u32) -> HashMap<String, u32> {
 }
 
 fn main() {
-    let server = KeyValue::new("sample.txt".try_into().unwrap());
+    let mut server = KeyValue::new("sample.txt".try_into().unwrap());
+    let ret = server.get(String::from("rishabh2")).unwrap();
+    println!("value from rishabh2: {}", ret);
+    server.set(String::from("rishabh4"), 89);
     dbg!(server);
-    println!("Hello, world!");
 }
