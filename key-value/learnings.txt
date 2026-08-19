@@ -1,0 +1,15 @@
+Big learnings from initial development: #Aug 18
+
+1) Could use an iterator to go through the file data
+2) The byte representation wasn't obvious to me at first. I stored my data in a txt file and that means
+I have a ASCII/UTF-8 representation of the bytes, not bytes that I can directly translate back to integers
+A u32::from_be_bytes() wouldn't solve the problem here!
+
+
+
+# Aug 19: Second class milestone
+1) create the database file with permissions locked down to file's owner
+2) on-disk format should use multiple files -- why though?
+2-1) could keep one key per file
+2-2) allowing keys to be composite, a.b.c where all keys a.* in the same file
+3) two new apis: list all keys() and delete a key from database
