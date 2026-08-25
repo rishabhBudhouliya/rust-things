@@ -10,6 +10,36 @@ A u32::from_be_bytes() wouldn't solve the problem here!
 # Aug 19: Second class milestone
 1) create the database file with permissions locked down to file's owner
 2) on-disk format should use multiple files -- why though?
+the suffix . is the key
+the prefix is the value
+
+
+# Aug 20: Second lecture: Implementation
+user.name,
+user.child.child
+a.b.c gives us hierarchy in our naming of keys
+for example, user.data/user.profile/user.name all go into a dir called user?
 2-1) could keep one key per file
 2-2) allowing keys to be composite, a.b.c where all keys a.* in the same file
 3) two new apis: list all keys() and delete a key from database
+
+
+Use transumate std mem for mapping the struct into the binary representation
+
+# Aug 21: Continue: Second lecture
+
+> How do I scan the files to get all data during init?
+just scan for files across the directory and load all keys in it?
+key-value/rishabh rishabh2 rishabh3 rishabh4
+
+user.region.country
+
+
+> how does my map preserve the hierarchy?
+key-value: we don't. 
+
+> user.name.name
+
+user.name and name
+
+
