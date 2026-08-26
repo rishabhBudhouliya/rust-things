@@ -41,8 +41,41 @@ impl KeyValue {
     // goal 2: define get/set functions for the KeyValue struct
     // we should not promise an owner value, instead, it should be a peek/reference into the storage
     pub fn get(&self, key: String) -> Option<&u32> {
-        dbg!(&self.map);
         return self.map.get(&key);
+    }
+
+    // list all keys
+    pub fn get_all(&self) -> Vec<&String> {
+        self.map.keys().collect()
+    }
+
+    // delete a key and confirm if that happened
+    pub fn delete_key(&mut self, deletion_key: &str) -> bool {
+        //file io to remove stuff
+        let t = deletion_key.to_string();
+        let components = split_key(&t);
+        let mut derived_key = "";
+        let mut filename = "";
+        let mut stored = String::new();
+        if let Some(prefix_key) = components {
+            filename = prefix_key.0;
+            derived_key = prefix_key.1;
+            stored = format!("{}:{}\n", derived_key, u32::MAX);
+        } else {
+            filename = "default";
+            // derived_key = format!("{}.{}", filename, key);
+            stored = format!("{}:{}\n", deletion_key, u32::MAX);
+        };
+        let written_buffer = stored.into_bytes();
+        let size_buffer = written_buffer.len();
+        let ptr: *const u8 = written_buffer.as_ptr();
+
+        let c_filename =
+            CString::new(self.dir.clone() + filename).expect("Failed to create CString");
+        let fd = unsafe { libc::open(c_filename.as_ptr(), libc::O_RDWR | libc::O_APPEND) as i32 };
+        let _ = unsafe { libc::write(fd as i32, ptr as *mut c_void, size_buffer as usize) };
+        self.map.remove(deletion_key);
+        true
     }
 
     // set requires two steps
@@ -64,6 +97,7 @@ impl KeyValue {
             stored = format!("{}:{}\n", derived_key, value);
         } else {
             filename = "default";
+            // derived_key = format!("{}.{}", filename, key);
             stored = format!("{}:{}\n", key, value);
         };
         let written_buffer = stored.into_bytes();
@@ -76,7 +110,7 @@ impl KeyValue {
             libc::open(
                 c_filename.as_ptr(),
                 libc::O_RDWR | libc::O_CREAT | libc::O_APPEND,
-                0o666,
+                0o600,
             ) as i32
         };
         let _ = unsafe { libc::write(fd as i32, ptr as *mut c_void, size_buffer as usize) };
@@ -113,8 +147,7 @@ fn scan_files(dir_name: &String) -> HashMap<String, i32> {
             .to_str()
             .unwrap();
         let c_filename = CString::new(file_path.clone()).expect("Failed to create CString");
-        let fd =
-            unsafe { libc::open(c_filename.as_ptr(), libc::O_RDWR | libc::O_APPEND, 0o666) as i32 };
+        let fd = unsafe { libc::open(c_filename.as_ptr(), libc::O_RDWR | libc::O_APPEND) as i32 };
         if fd == -1 {
             let err = io::Error::last_os_error();
             dbg!(err);
@@ -168,10 +201,13 @@ fn parse_file(map: &mut HashMap<String, u32>, prefix_key_name: &String, fd: &i32
 
 fn main() {
     let mut server = KeyValue::new(String::from("data/"));
-    let ret = server
-        .get(String::from("sample.rishabh2"))
-        .expect("key not present in the map");
-    println!("value from rishabh2: {}", ret);
+    match server.get(String::from("sample.rishabh2")) {
+        Some(key) => println!("value from rishabh2: {}", key),
+        None => {}
+    }
     server.set(String::from("rishabh4"), 89);
+    let all_keys = server.get_all();
+    dbg!(all_keys);
+    server.delete_key("rishabh4");
     dbg!(server);
 }
