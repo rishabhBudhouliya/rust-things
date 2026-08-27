@@ -191,10 +191,14 @@ fn parse_file(map: &mut HashMap<String, u32>, prefix_key_name: &String, fd: &i32
         // add a check on whether the iter has length = 2 or not
         let mut key =
             String::from_utf8((key_value_iter.next().unwrap()).try_into().unwrap()).unwrap();
-        if !prefix_key_name.is_empty() {
+        if !prefix_key_name.is_empty() && prefix_key_name != "default" {
             key = prefix_key_name.clone() + "." + &key;
         }
         let value = str::from_utf8(key_value_iter.next().unwrap()).unwrap();
+        if map.get(&key).is_some() {
+            println!("Value already exists");
+            continue;
+        }
         map.insert(key, u32::from_str_radix(value, 10).unwrap());
     }
 }
@@ -208,6 +212,6 @@ fn main() {
     server.set(String::from("rishabh4"), 89);
     let all_keys = server.get_all();
     dbg!(all_keys);
-    server.delete_key("rishabh4");
+    // server.delete_key("rishabh4");
     dbg!(server);
 }
