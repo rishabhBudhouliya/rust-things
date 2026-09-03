@@ -42,7 +42,7 @@ impl KeyValue {
     pub fn handle_request(&mut self, request: Request) -> Response {
         let response: Response = match request {
             Request::GET { key } => {
-                let ret = self.get(key);
+                let ret = self.get(&key);
                 match ret {
                     None => Response::GetResponse {
                         status: Status::Failure,
@@ -61,7 +61,7 @@ impl KeyValue {
                 }
             }
             Request::DELETE { key } => {
-                let ret = self.delete_key(key);
+                let ret = self.delete_key(&key);
                 if ret {
                     Response::DeleteResponse {
                         status: Status::Success,
