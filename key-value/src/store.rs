@@ -103,8 +103,10 @@ impl KeyValue {
             CString::new(self.dir.clone() + filename).expect("Failed to create CString");
         let fd = unsafe { libc::open(c_filename.as_ptr(), libc::O_RDWR | libc::O_APPEND) as i32 };
         let _ = unsafe { libc::write(fd as i32, ptr as *mut c_void, size_buffer as usize) };
-        self.map.remove(deletion_key);
-        true
+        match self.map.remove(deletion_key) {
+            None => false,
+            Some(..) => true,
+        }
     }
 
     // set requires two steps
@@ -233,10 +235,11 @@ fn parse_file(map: &mut HashMap<String, u32>, prefix_key_name: &String, fd: &i32
             key = prefix_key_name.clone() + "." + &key;
         }
         let value = str::from_utf8(key_value_iter.next().unwrap()).unwrap();
-        if map.get(&key).is_some() {
-            println!("Value already exists");
-            continue;
+        let numerical_value = str::parse::<u32>(value).unwrap();
+        if numerical_value == u32::MAX {
+            map.remove(&key);
+        } else {
+            map.insert(key, numerical_value);
         }
-        map.insert(key, u32::from_str_radix(value, 10).unwrap());
     }
 }

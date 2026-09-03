@@ -42,4 +42,109 @@ key-value: we don't.
 
 user.name and name
 
+# Aug 26th: Implementation for key value server
+1) change permission setting of database files locked down to file's owner
+1-1) only database should be able to read, write and execute on the files it persists.
+2) function to list all keys
+bug: default keys are duplicated due to filename/actual name split
+3) delete a key from database
+3-1) File io: to delete a key, I need to know the file where they key resides
+Once that is known, then the operation is to open the file, read the contents and delete
+the key from it
 
+
+# Aug 27th: bug 
+Bug is that a default key, (without a . notation), gets duplicated in a weird way 
+where we have both "rishabh" and "default.rishabh" on the in-memory map
+
+
+Now, the consequence of this issue is that once we delete stuff, we have to either delete both because we technically delete the default file (actual file) key. But the in-memory map has a ghost key, "default.rishabh4": 4294967295 (which is u32::MAX)
+
+
+## Next milestone
+Turn your key-value store into a Unix domain socket server. Write a client subcommand that connects to the server and allows you to read and write keys. Add a mode that uses a FIFO instead of sockets for client–server communication
+
+
+1) Design a inter-process communication channel for client-server communication
+2) two processes, one a parent (server) and one a child (client)
+
+
+1) Process of creating a unix domain socket 
+server
+1) socket.socket with AF_UNIX and SOCK_STREAM
+2) bind on a path 
+3) start listening
+
+client 
+1) open a socket of a similar client as server 
+2) connect on the same path
+
+
+# Aug 30th: Thinking about wire protocol for server-client communication
+
+1. Why do I need a wire protocol?
+2. I think I came up with a wire protocol for Atomic Pipe
+2.1 That protocol involved a header (8 bytes) + fixed sized data chunk of bytes
+
+3. Ok so couple of reasons why I'd need a wire protocol:
+3.1 given that we communicate with bytes in a socket, we need a higher primitive that has the comfort of a boundary/identification that can be useful for users - like a message with predefined boundaries
+3.2 it allows us to give ordering gaurantees
+3.3 also allows to build other features on top of that (like congestion control/security)
+
+Our data is key: string (growable), value: u32 (4 bytes)
+
+4. Another consideration for wire format: operation (get/set/delete)
+bytes(len(payload):op:[payload]
+
+op = 1, 0 , -1
+payload: keydelimetervalue
+
+
+lengthopvaluekey
+
+payload = bytes([len(payload)][key]:[value][key:value])
+
+
+Mon, Aug #31 
+
+1. a Rust type for wire format: creating two enums Op, WireFormat
+
+length + op = 5 bytes
+rest is length - 5 
+[rest]
+
+Tue, Sept #1 
+1. Implement the enum interface with the wire format and socket interface
+Think about next steps
+2. Think about handling cases where the listening loop fails and we need to unlink the socket/close wind down stuff anyways
+
+After receiving the input, decide actions:
+1) get
+mutate in-memory hashmap: no 
+retrieve in get key 
+
+
+2) set 
+mutate in memory hashmap: yes
+on-disk operation: yes 
+
+3) delete 
+mutate in memory hashmap: yes 
+on disk operation: yes 
+
+
+# Wed, Sep 2
+
+0. Restructured the src into main and store where store represents the in-memory/disc representation of the key-value server and main contains the rest [DONE]
+
+0.1 Added a new interface: cli arguments via a slice pattern match which seems sweet [DONE] 
+
+1. Write a client subcommand that connects to the server and allows you to read and write keys [STILL NOT DONE]
+
+<>client subcommand should parse args (&str) into enums/structures that our store understands
+
+
+2. Complete listen() function to act on the incoming binary stream 
+example: get an actual key, store an actual value  [DONE]
+
+3. Move on to next targets: Network, Multithreading
