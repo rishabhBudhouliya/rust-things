@@ -4,10 +4,13 @@
 #![allow(warnings)]
 use libc;
 use std::env;
+use std::ffi::CStr;
 use std::ffi::CString;
 use std::ffi::c_void;
 use std::io;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -24,8 +27,12 @@ use crate::store::KeyValue;
 mod layout;
 mod net;
 mod store;
+
 #[cfg(test)]
 mod test;
+
+static SOCK_PATH: &CStr = c"server.sock";
+
 // splits the key based on dot delimiter and returns back its components
 // use rsplit_once instead of generic split as it cuts the string in two halves (prefix | suffix)
 fn split_key(key: &String) -> Option<(&str, &str)> {
@@ -33,14 +40,25 @@ fn split_key(key: &String) -> Option<(&str, &str)> {
     result
 }
 
+extern "C" fn signal_handler(signal: i32) {
+    let _ = unsafe { libc::unlink(SOCK_PATH.as_ptr()) };
+    unsafe { { libc::_exit(0) } }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let parse_args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut server = store::KeyValue::new(String::from("data/"));
+    let mut server = Arc::new(Mutex::new(store::KeyValue::new(String::from("data/"))));
+    unsafe {
+        libc::signal(
+            libc::SIGTERM,
+            signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t,
+        )
+    };
     match parse_args.as_slice() {
         [_, "start", "--", "ipc", protocol] => {
             let protocol = Protocol::try_from(*protocol);
-            listen(&mut server, protocol.expect("unknown protocol"));
+            listen(server, protocol.expect("unknown protocol"));
         }
         [_, "client", "--", "ipc", protocol, rest @ ..] => match rest {
             ["get", key] => client_connect(
@@ -65,14 +83,17 @@ fn main() {
             _ => println!("client subcommand parsing failed"),
         },
         [_, "get", key] => {
-            let ret = server.get(key);
+            let ret = server.lock().unwrap().get(key);
             println!("the value for {key} is {}", ret.unwrap_or(0));
         }
         [_, "set", key, value] => {
-            server.set(key.to_string(), u32::from_str(value).unwrap());
+            server
+                .lock()
+                .unwrap()
+                .set(key.to_string(), u32::from_str(value).unwrap());
         }
         [_, "stop"] => {
-            server.stop();
+            server.lock().unwrap().stop();
         }
         _ => panic!("can't parse arguments"),
     };

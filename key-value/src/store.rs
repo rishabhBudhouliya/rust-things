@@ -224,7 +224,7 @@ fn parse_file(map: &mut HashMap<String, u32>, prefix_key_name: &String, fd: &i32
     let iter = buffer.split(|num| *num == b'\n');
     for record in iter {
         if record.is_empty() {
-            println!("Encountered an empty record");
+            //println!("Encountered an empty record");
             break;
         }
         let mut key_value_iter = record.split(|num| *num == b':');

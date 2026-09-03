@@ -122,6 +122,33 @@ pub fn parse_request(
     }
     tail_buffer.drain(..ptx);
 }
+// (op, key, value)
+pub fn parse_client_response(buf: &[u8]) {
+    if buf.len() < 2 {
+        panic!("client: invalid response from server")
+    }
+    let op = Op::try_from(buf[0]).expect("client: unable to parse response");
+    let status = buf[1];
+    if status == 1 {
+        println!("op: {op:?} failed");
+        return;
+    }
+    match op {
+        Op::GET => println!(
+            "value is: {}",
+            u32::from_be_bytes(buf[2..6].try_into().unwrap())
+        ),
+        Op::SET => println!("ok"),
+        Op::DELETE => {
+            let v = buf[2];
+            if v == 1 {
+                println!("deleted")
+            } else {
+                println!("not found")
+            }
+        }
+    }
+}
 
 pub fn parse_response(response: Response) -> Vec<u8> {
     let mut result = Vec::new();
