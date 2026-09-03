@@ -7,6 +7,7 @@ use std::io;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -135,6 +136,7 @@ pub fn listen(server: Arc<Mutex<KeyValue>>, protocol: Protocol) {
 
 // serve the connection
 fn accept(accepted_socket: i32, server: Arc<Mutex<KeyValue>>) {
+    //sleep(Duration::from_secs(2));
     let listen_buff = vec![0; 1024 as usize];
     let listen_buff_ptr = listen_buff.as_ptr();
     let mut tail_buffer = Vec::new();

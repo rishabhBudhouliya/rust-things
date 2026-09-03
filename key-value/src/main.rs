@@ -4,10 +4,13 @@
 #![allow(warnings)]
 use libc;
 use std::env;
+use std::ffi::CStr;
 use std::ffi::CString;
 use std::ffi::c_void;
 use std::io;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -20,14 +23,16 @@ use crate::net::Protocol;
 use crate::net::client_connect;
 use crate::net::listen;
 use crate::store::KeyValue;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 mod layout;
 mod net;
 mod store;
+
 #[cfg(test)]
 mod test;
+
+static SOCK_PATH: &CStr = c"server.sock";
+
 // splits the key based on dot delimiter and returns back its components
 // use rsplit_once instead of generic split as it cuts the string in two halves (prefix | suffix)
 fn split_key(key: &String) -> Option<(&str, &str)> {
@@ -35,10 +40,21 @@ fn split_key(key: &String) -> Option<(&str, &str)> {
     result
 }
 
+extern "C" fn signal_handler(signal: i32) {
+    let _ = unsafe { libc::unlink(SOCK_PATH.as_ptr()) };
+    unsafe { { libc::_exit(0) } }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let parse_args: Vec<&str> = args.iter().map(String::as_str).collect();
     let mut server = Arc::new(Mutex::new(store::KeyValue::new(String::from("data/"))));
+    unsafe {
+        libc::signal(
+            libc::SIGTERM,
+            signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t,
+        )
+    };
     match parse_args.as_slice() {
         [_, "start", "--", "ipc", protocol] => {
             let protocol = Protocol::try_from(*protocol);
