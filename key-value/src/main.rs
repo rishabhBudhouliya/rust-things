@@ -20,6 +20,8 @@ use crate::net::Protocol;
 use crate::net::client_connect;
 use crate::net::listen;
 use crate::store::KeyValue;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 mod layout;
 mod net;
@@ -36,11 +38,11 @@ fn split_key(key: &String) -> Option<(&str, &str)> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     let parse_args: Vec<&str> = args.iter().map(String::as_str).collect();
-    let mut server = store::KeyValue::new(String::from("data/"));
+    let mut server = Arc::new(Mutex::new(store::KeyValue::new(String::from("data/"))));
     match parse_args.as_slice() {
         [_, "start", "--", "ipc", protocol] => {
             let protocol = Protocol::try_from(*protocol);
-            listen(&mut server, protocol.expect("unknown protocol"));
+            listen(server, protocol.expect("unknown protocol"));
         }
         [_, "client", "--", "ipc", protocol, rest @ ..] => match rest {
             ["get", key] => client_connect(
@@ -65,14 +67,17 @@ fn main() {
             _ => println!("client subcommand parsing failed"),
         },
         [_, "get", key] => {
-            let ret = server.get(key);
+            let ret = server.lock().unwrap().get(key);
             println!("the value for {key} is {}", ret.unwrap_or(0));
         }
         [_, "set", key, value] => {
-            server.set(key.to_string(), u32::from_str(value).unwrap());
+            server
+                .lock()
+                .unwrap()
+                .set(key.to_string(), u32::from_str(value).unwrap());
         }
         [_, "stop"] => {
-            server.stop();
+            server.lock().unwrap().stop();
         }
         _ => panic!("can't parse arguments"),
     };

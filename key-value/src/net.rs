@@ -5,6 +5,8 @@ use std::ffi::CString;
 use std::ffi::c_void;
 use std::io;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -13,6 +15,7 @@ use crate::layout::Request;
 use crate::layout::Response;
 use crate::layout::Status;
 use crate::layout::frame_encoder;
+use crate::layout::parse_client_response;
 use crate::store::KeyValue;
 
 #[derive(PartialEq, Debug)]
@@ -33,7 +36,7 @@ impl TryFrom<&str> for Protocol {
     }
 }
 
-pub fn listen(server: &mut KeyValue, protocol: Protocol) {
+pub fn listen(server: Arc<Mutex<KeyValue>>, protocol: Protocol) {
     let socket_fd = if protocol == Protocol::tcp {
         let socket_fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0) };
         let mut sockaddr: libc::sockaddr_in = unsafe { std::mem::zeroed() };
@@ -118,8 +121,12 @@ pub fn listen(server: &mut KeyValue, protocol: Protocol) {
             dbg!(err);
             println!("unable to accept connections");
         }
-        accept(accepted_fd_socket, server);
+        let server = Arc::clone(&server);
+        std::thread::spawn(move || accept(accepted_fd_socket, server));
+        /*
+        * accept(accepted_fd_socket, server);
         let _ = unsafe { libc::close(accepted_fd_socket) };
+        */
     }
     let path = String::from("server.sock");
     let c_path = CString::new(path).expect("Failed to create CString");
@@ -127,7 +134,7 @@ pub fn listen(server: &mut KeyValue, protocol: Protocol) {
 }
 
 // serve the connection
-fn accept(accepted_socket: i32, server: &mut KeyValue) {
+fn accept(accepted_socket: i32, server: Arc<Mutex<KeyValue>>) {
     let listen_buff = vec![0; 1024 as usize];
     let listen_buff_ptr = listen_buff.as_ptr();
     let mut tail_buffer = Vec::new();
@@ -147,7 +154,7 @@ fn accept(accepted_socket: i32, server: &mut KeyValue) {
             if request.is_none() {
                 continue;
             }
-            let response = server.handle_request(request.unwrap());
+            let response = server.lock().unwrap().handle_request(request.unwrap());
             let response_buff = crate::layout::parse_response(response);
             let _ = unsafe {
                 libc::send(
@@ -224,6 +231,9 @@ pub fn client_connect(request: Request, protocol: Protocol) {
     // need a buffer now
     let _ = unsafe { libc::send(socket_fd, result.as_ptr() as *const c_void, result.len(), 0) };
     let output_buf: Vec<u8> = vec![0; 1024];
-    let _ = unsafe { libc::recv(socket_fd, output_buf.as_ptr() as *mut c_void, 1024, 0) };
-    println!("server returned: {output_buf:?}")
+    let read_num = unsafe { libc::recv(socket_fd, output_buf.as_ptr() as *mut c_void, 1024, 0) };
+    if read_num == -1 {
+        println!("client: no response from server")
+    }
+    parse_client_response(&output_buf[..(read_num as usize)]);
 }
